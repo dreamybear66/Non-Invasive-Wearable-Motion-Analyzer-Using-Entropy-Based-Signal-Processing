@@ -7,6 +7,8 @@ from app.api.data_ingestion import router as data_ingestion_router
 from app.api.signals import router as signals_router
 from app.api.ws import router as ws_router
 from app.api.entropy import router as entropy_router
+from app.api.auth import router as auth_router
+from app.api.reports import router as reports_router
 from app.core.redis import init_redis, close_redis
 
 app = FastAPI(title="Sports EL Backend", version="1.0.0")
@@ -27,10 +29,12 @@ async def startup_event():
 async def shutdown_event():
     await close_redis()
 
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(sessions_router, prefix="/api/v1/sessions", tags=["Sessions"])
 app.include_router(data_ingestion_router, prefix="/api/v1/sessions", tags=["Ingestion"])
 app.include_router(signals_router, prefix="/api/v1/sessions", tags=["Signals"])
 app.include_router(entropy_router, prefix="/api/v1/sessions", tags=["Entropy"])
+app.include_router(reports_router, prefix="/api/v1/sessions", tags=["Reports"])
 app.include_router(ws_router, prefix="/ws", tags=["Websocket"])
 
 @app.get("/health")
