@@ -1,0 +1,108 @@
+name: CI — Sports EL
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  # ─────────────────────────────────────────────
+  #  Backend Tests
+  # ─────────────────────────────────────────────
+  backend-tests:
+    name: Backend — pytest
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_DB: sports_el_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:test_password@localhost:5432/sports_el_test
+          REDIS_URL: redis://localhost:6379/0
+          APP_SECRET_KEY: test-secret-key
+          JWT_SECRET_KEY: test-jwt-secret
+          APP_ENV: testing
+        run: |
+          cd backend
+          pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=80
+
+  # ─────────────────────────────────────────────
+  #  Frontend Lint
+  # ─────────────────────────────────────────────
+  frontend-lint:
+    name: Frontend — ESLint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npm run lint
+
+  # ─────────────────────────────────────────────
+  #  Docker Build Check (on main only)
+  # ─────────────────────────────────────────────
+  docker-build:
+    name: Docker — Build Images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [backend-tests, frontend-lint]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t sports-el-backend:${{ github.sha }} ./backend
+
+      - name: Build frontend image
+        run: docker build -t sports-el-frontend:${{ github.sha }} ./frontend

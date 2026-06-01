@@ -1,0 +1,1 @@
+export default function FatigueGauge() { return <div>FatigueGauge</div>; }

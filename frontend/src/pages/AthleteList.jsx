@@ -1,0 +1,1 @@
+export default function AthleteList() { return <div>AthleteList</div>; }

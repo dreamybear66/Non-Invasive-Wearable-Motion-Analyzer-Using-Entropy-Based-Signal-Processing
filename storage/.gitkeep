@@ -1,0 +1,4 @@
+Sports EL — local file storage directory
+Generated reports, exports, and uploads are stored here.
+
+This directory is gitignored in production.

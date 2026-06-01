@@ -1,0 +1,1 @@
+export default function FatigueAlert() { return <div>FatigueAlert</div>; }

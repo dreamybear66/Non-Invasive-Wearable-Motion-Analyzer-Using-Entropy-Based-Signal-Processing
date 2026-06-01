@@ -1,0 +1,1 @@
+export default function EntropyChart() { return <div>EntropyChart</div>; }

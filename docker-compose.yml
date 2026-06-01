@@ -1,0 +1,106 @@
+version: "3.9"
+
+# ═══════════════════════════════════════════════════════
+#  Sports EL — Development Docker Compose
+# ═══════════════════════════════════════════════════════
+
+services:
+
+  # ── TimescaleDB (PostgreSQL 15 + TimescaleDB) ─────────
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: sports_el_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sports_el}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sports_el_dev}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-sports_el}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sports_el_net
+
+  # ── Redis 7 ───────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sports_el_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sports_el_net
+
+  # ── FastAPI Backend ────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sports_el_backend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:sports_el_dev@db:5432/sports_el}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - APP_SECRET_KEY=${APP_SECRET_KEY:-dev-secret-key-change-in-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-change-in-production}
+      - APP_ENV=${APP_ENV:-development}
+      - APP_DEBUG=${APP_DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    volumes:
+      - ./backend:/app         # Hot reload in development
+      - ./storage:/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sports_el_net
+
+  # ── React Frontend ─────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sports_el_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - sports_el_net
+
+# ── Volumes ───────────────────────────────────────────────
+volumes:
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────
+networks:
+  sports_el_net:
+    driver: bridge

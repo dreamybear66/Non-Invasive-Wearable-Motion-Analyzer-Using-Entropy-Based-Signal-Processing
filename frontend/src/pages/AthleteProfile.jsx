@@ -1,0 +1,1 @@
+export default function AthleteProfile() { return <div>AthleteProfile</div>; }
